@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ecommerce.orderservice.service.OrderService;
+import com.ecommerce.orderservice.messaging.TopicProducer;
 import com.ecommerce.orderservice.exception.EcommerceException;
 import com.ecommerce.orderservice.model.OrderDto;
 
@@ -28,8 +29,14 @@ import io.swagger.annotations.ApiResponses;
 @RequestMapping("/api/orders")
 public class OrderController {
 
+	private final TopicProducer topicProducer;
+
 	@Autowired
 	OrderService orderService;
+
+	public OrderController(TopicProducer producer) {
+		this.topicProducer = producer;
+	}
 
 	@GetMapping
 	@ApiOperation(value = "View all orders", response = ResponseEntity.class)
@@ -65,7 +72,9 @@ public class OrderController {
 	@ApiResponses(value = { @ApiResponse(code = 201, message = "Successfully created a order"),
 			@ApiResponse(code = 500, message = "Application failed to process the request") })
 	public ResponseEntity<OrderDto> createOrder(@RequestBody OrderDto order) {
-		return new ResponseEntity<>(orderService.createOrder(order), HttpStatus.CREATED);
+		OrderDto savedOrder = orderService.createOrder(order);
+		topicProducer.send(savedOrder);
+		return new ResponseEntity<>(savedOrder, HttpStatus.CREATED);
 	}
 
 	@PutMapping("/{id}")

@@ -15,6 +15,5 @@ public interface ItemService {
 	ItemDto updateItem(long id, ItemDto item);
 
 	void deleteItem(long id);
-	
-	void reduceProductStock(ItemDto item);
+
 }

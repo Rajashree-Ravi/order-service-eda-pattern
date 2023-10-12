@@ -3,7 +3,6 @@ package com.ecommerce.orderservice.service.impl;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import org.modelmapper.ModelMapper;
 import org.slf4j.Logger;
@@ -18,11 +17,9 @@ import com.ecommerce.orderservice.repository.OrderRepository;
 import com.ecommerce.orderservice.service.ItemService;
 import com.ecommerce.orderservice.service.OrderService;
 import com.ecommerce.orderservice.exception.EcommerceException;
-import com.ecommerce.orderservice.model.InventoryDto;
 import com.ecommerce.orderservice.model.ItemDto;
 import com.ecommerce.orderservice.model.OrderDto;
 import com.ecommerce.orderservice.model.OrderStatus;
-import com.ecommerce.orderservice.model.ProductDto;
 
 @Service
 public class OrderServiceImpl implements OrderService {
@@ -38,17 +35,11 @@ public class OrderServiceImpl implements OrderService {
 	@Autowired
 	private ModelMapper mapper;
 
-	@Autowired
-	private ProductServiceProxy productServiceProxy;
-
-	@Autowired
-	private InventoryServiceProxy inventoryServiceProxy;
-
 	@Override
 	public List<OrderDto> getAllOrders() {
 		List<OrderDto> orders = new ArrayList<>();
 		orderRepository.findAll().forEach(order -> {
-			
+
 			orders.add(mapper.map(order, OrderDto.class));
 		});
 		return orders;
@@ -62,29 +53,12 @@ public class OrderServiceImpl implements OrderService {
 
 	@Override
 	public OrderDto createOrder(OrderDto orderDto) {
-
-		// Check if all the product are available in stock
-		checkProductStockAvailability(orderDto.getItems());
-
-		// Check for customer information
-		// checkCustomer(orderDto.getUserId());
-
-		// Create items
-		orderDto = createItems(orderDto);
-
 		Order order = mapper.map(orderDto, Order.class);
-
 		return mapper.map(orderRepository.save(order), OrderDto.class);
 	}
 
 	@Override
 	public OrderDto updateOrder(long id, OrderDto orderDto) {
-
-		// Check if all products are available in stock
-		checkProductStockAvailability(orderDto.getItems());
-
-		// Check for customer information
-		// checkCustomer(orderDto.getUserId());
 
 		Optional<Order> updatedOrder = orderRepository.findById(id).map(existingOrder -> {
 
@@ -150,52 +124,4 @@ public class OrderServiceImpl implements OrderService {
 		LOGGER.info("Order deleted Successfully");
 	}
 
-	private void checkProductStockAvailability(List<ItemDto> items) {
-		for (ItemDto item : items) {
-			ProductDto product = productServiceProxy.getProductById(item.getProductId());
-			if (product == null || product.getId() == null)
-				throw new EcommerceException("product-not-found",
-						"Product with id = " + item.getProductId() + " not found.", HttpStatus.NOT_FOUND);
-
-			int availableStock = 0;
-
-			if (item.getInventoryId() != null) {
-				InventoryDto inventory = inventoryServiceProxy.getInventoryById(item.getInventoryId());
-				availableStock = inventory.getVendorInventory();
-			} else {
-				List<InventoryDto> inventoryList = inventoryServiceProxy.getInventoryByProductId(product.getId());
-				availableStock = inventoryList.stream().map(InventoryDto::getVendorInventory)
-						.collect(Collectors.summingInt(Integer::intValue));
-			}
-
-			if (availableStock == 0)
-				throw new EcommerceException("product-not-available",
-						"Product with id: " + item.getProductId() + " is/are not available in stock.",
-						HttpStatus.NOT_FOUND);
-
-			if (availableStock < item.getQuantity())
-				throw new EcommerceException("product-not-available", "Only " + availableStock
-						+ " units of product - id: " + item.getProductId() + " is/are available.",
-						HttpStatus.NOT_FOUND);
-		}
-	}
-
-	/*
-	 * private void checkCustomer(long customerId) { CustomerDto customer =
-	 * customerClient.getCustomerById(customerId); if (customer == null ||
-	 * customer.getId() == null) throw new NotFoundException("Customer with id = " +
-	 * customerId + " not found."); }
-	 */
-
-	private OrderDto createItems(OrderDto orderDto) {
-		List<ItemDto> savedItems = new ArrayList<>();
-
-		// Create new items added to order
-		for (ItemDto itemDto : orderDto.getItems()) {
-			savedItems.add(itemService.createItem(itemDto));
-		}
-		orderDto.setItems(savedItems);
-
-		return orderDto;
-	}
 }
